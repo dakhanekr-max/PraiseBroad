@@ -4,7 +4,7 @@ Commuters tip Ifeoma's bus-timetable site with a short note. No platform, no cut
 
 **Deployed contract (Sepolia):** `0x98156cAF5904DDcA945830449c34D6466734eD62`  
 https://sepolia.etherscan.io/address/0x98156cAF5904DDcA945830449c34D6466734eD62  
-**Live page:** PASTE_PAGES_URL_HERE
+**Live page:** https://dakhanekr-max.github.io/PraiseBroad/
 
 ## Design decisions
 - **Where the record lives:** every tip is stored in the contract and emitted as a `Tipped` event. The wall is rebuilt in the browser from those events only, via a public Sepolia RPC. There is no backend or database, so nobody (including Ifeoma) can fake or delete an entry.
