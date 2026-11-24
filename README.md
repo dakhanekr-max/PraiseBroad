@@ -2,7 +2,7 @@
 
 Commuters tip Ifeoma's bus-timetable site with a short note. No platform, no cut.
 
-**Deployed contract (Sepolia):** `PASTE_ADDRESS_HERE`  
+**Deployed contract (Sepolia):** `0x98156cAF5904DDcA945830449c34D6466734eD62`  
 https://sepolia.etherscan.io/address/0x98156cAF5904DDcA945830449c34D6466734eD62  
 **Live page:** PASTE_PAGES_URL_HERE
 
