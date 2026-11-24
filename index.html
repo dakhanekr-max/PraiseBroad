@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Praise Board</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:640px;margin:2rem auto;padding:0 1rem;line-height:1.5}
+input,textarea,button{font:inherit;padding:.5rem;width:100%;box-sizing:border-box;margin:.25rem 0}
+button{cursor:pointer}.s{padding:.5rem;border-radius:6px;background:#eee;margin:.5rem 0;min-height:1.5em}
+.tip{border-bottom:1px solid #ddd;padding:.6rem 0}.m{color:#666;font-size:.85em}
+</style></head><body>
+<h1>Praise Board</h1>
+<p>Support Ifeoma's bus timetables. Tips go straight to her contract: no platform, no cut.</p>
+<button id="connect">Connect wallet</button>
+<div id="acct" class="m"></div>
+<input id="amt" value="0.001" inputmode="decimal" aria-label="Amount in Sepolia ETH">
+<textarea id="note" rows="2" placeholder="Short note (max 140 bytes)"></textarea>
+<div id="count" class="m"></div>
+<button id="send">Send tip</button>
+<div id="status" class="s"></div>
+<h2>Supporters</h2><div id="wall">Loading…</div>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script>
+const READ_RPC="https://ethereum-sepolia-rpc.publicnode.com", SEPOLIA=11155111n, MAX=140;
+const ABI=["function tip(string note) payable","event Tipped(address indexed from,uint256 amount,string note,uint256 timestamp)"];
+const $=id=>document.getElementById(id), status=(t)=>$("status").textContent=t;
+let cfg, reader, signer;
+const bytes=s=>new TextEncoder().encode(s).length;
+$("note").oninput=()=>{const n=bytes($("note").value);$("count").textContent=n+"/"+MAX+" bytes"+(n>MAX?" – too long":"")};
+
+async function connect(){
+  if(!window.ethereum){status("No wallet found. Install MetaMask or open this page in a wallet browser.");return false}
+  try{
+    const bp=new ethers.BrowserProvider(window.ethereum);
+    await bp.send("eth_requestAccounts",[]);
+    if((await bp.getNetwork()).chainId!==SEPOLIA){
+      try{await bp.send("wallet_switchEthereumChain",[{chainId:"0xaa36a7"}])}
+      catch(e){status("Please switch your wallet to the Sepolia test network.");return false}
+    }
+    signer=await new ethers.BrowserProvider(window.ethereum).getSigner(); // fresh provider after network switch
+    $("acct").textContent="Connected: "+await signer.getAddress()+" on Sepolia";
+    return true;
+  }catch(e){status(e.code===4001||e.code==="ACTION_REJECTED"?"Connection request was rejected.":"Could not connect: "+(e.shortMessage||e.message));return false}
+}
+$("connect").onclick=connect;
+
+$("send").onclick=async()=>{
+  if(!cfg){status("Contract not deployed yet.");return}
+  const note=$("note").value;
+  if(bytes(note)>MAX){status("Note is too long: "+bytes(note)+" bytes, max "+MAX+".");return}
+  let value;try{value=ethers.parseEther($("amt").value.trim());if(value<=0n)throw 0}catch{status("Enter an amount greater than 0.");return}
+  if(!signer&&!(await connect()))return;
+  try{
+    const c=new ethers.Contract(cfg.address,ABI,signer);
+    status("Confirm in your wallet…");
+    const tx=await c.tip(note,{value});
+    status("Pending… waiting for confirmation ("+tx.hash.slice(0,10)+"…)");
+    const r=await tx.wait();
+    if(r.status===1){status("Confirmed! Thank you.");$("note").value="";await refresh()}
+    else status("Transaction failed on-chain. No tip was recorded.");
+  }catch(e){
+    if(e.code===4001||e.code==="ACTION_REJECTED")status("You rejected the prompt. Nothing was sent.");
+    else if(e.code==="INSUFFICIENT_FUNDS")status("Not enough Sepolia ETH (including gas).");
+    else status("Failed: "+(e.reason||e.shortMessage||e.message));
+  }
+};
+
+// The wall is rebuilt only from the contract's Tipped events: nothing Ifeoma (or I) can edit.
+async function refresh(){
+  const c=new ethers.Contract(cfg.address,ABI,reader);
+  const logs=await c.queryFilter(c.filters.Tipped(),cfg.block,"latest");
+  const w=$("wall");w.replaceChildren();
+  if(!logs.length){w.textContent="No tips yet. Be the first!";return}
+  for(const l of logs.reverse()){
+    const d=document.createElement("div");d.className="tip";
+    const a=document.createElement("b");a.textContent=l.args.from.slice(0,6)+"…"+l.args.from.slice(-4);
+    const n=document.createElement("div");n.textContent=l.args.note||"(no note)"; // textContent: notes can't inject HTML
+    const m=document.createElement("div");m.className="m";
+    m.textContent=ethers.formatEther(l.args.amount)+" ETH · "+new Date(Number(l.args.timestamp)*1000).toLocaleString();
+    d.append(a,n,m);w.append(d);
+  }
+}
+(async()=>{
+  try{cfg=await (await fetch("deployed.json")).json()}catch{$("wall").textContent="Contract not deployed yet (deployed.json missing).";return}
+  reader=new ethers.JsonRpcProvider(READ_RPC);
+  try{await refresh();setInterval(()=>refresh().catch(()=>{}),8000)}catch(e){$("wall").textContent="Could not load the wall: "+e.message}
+})();
+</script></body></html>
